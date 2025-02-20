@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  database:
+    image: bitnami/postgresql
+    ports:
+      - 5002:5432
+    environment:
+      - POSTGRESQL_USERNAME=goes-db-user
+      - POSTGRESQL_PASSWORD=password
+      - POSTGRESQL_DATABASE=goes-db
+    volumes:
+      - db-data:/bitnami/postgresql
+
+volumes:
+  db-data:

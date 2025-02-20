@@ -1,0 +1,39 @@
+@host = https://goes-camera-monitoring-service-webapp-byfhf7enekh7cnbn.eastus-01.azurewebsites.net
+# @host = http://localhost:3001
+@path = classrooms
+
+@token = {{ login.response.body.token }}
+
+# @name login
+POST {{host}}/auth/login
+content-type: application/json
+
+{
+  "login": "admin",
+  "password": "admin"
+}
+
+###
+
+### 
+# @name list-user-schedule
+GET {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf/schedules
+Authorization: Bearer {{token}}
+
+### 
+# @name create-user-schedule
+POST {{host}}/{{path}}/8fbc429a-ebd2-4bff-84d5-70dfac61967c/schedules
+Authorization: Bearer {{token}}
+content-type: application/json
+
+{
+  "dayOfWeek": "MONDAY",
+  "period": "ALL_DAY"
+}
+
+### 
+# @name delete-user-schedule
+DELETE {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf/schedules/9a4eb104-17b2-4cee-a638-747c4d5dc6ab
+Authorization: Bearer {{token}}
+
+

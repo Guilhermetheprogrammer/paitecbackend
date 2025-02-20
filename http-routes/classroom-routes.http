@@ -1,0 +1,103 @@
+@host = https://goes-camera-monitoring-service-webapp-byfhf7enekh7cnbn.eastus-01.azurewebsites.net
+# @host = http://localhost:3001
+@path = classrooms
+
+@token = {{ login.response.body.token }}
+
+# @name login
+POST {{host}}/auth/login
+content-type: application/json
+
+{
+  "login": "admin",
+  "password": "admin"
+}
+
+###
+
+
+# @name create-classroom
+POST {{host}}/{{path}}
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Leandro 02",
+  "schoolId": "e99bfe19-2bb6-4fa0-a634-3a3ea7607e7a",
+  "rtmpUrl": "rtmp://20.161.39.254:8080/hls/school1-cam16.m3u8"
+}
+
+### 
+# @name list-classrooms
+GET {{host}}/{{path}}
+Authorization: Bearer {{token}}
+
+
+### 
+# @name get-classroom
+GET {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf
+Authorization: Bearer {{token}}
+
+### 
+
+# @name update-classroom
+PUT {{host}}/{{path}}/5c22d9ce-2258-49f5-803a-e7b86dbe0ab7
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "rtmpUrl": "http://20.161.39.254:8080/hls/school1-cam1.m3u8"
+}
+
+
+### 
+
+# @name delete-classroom
+DELETE {{host}}/{{path}}/65a98b66-e8f3-47c9-9119-164b1ed31803
+Authorization: Bearer {{token}}
+
+### 
+# @name list-users-from-classroom
+GET {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf/users
+Authorization: Bearer {{token}}
+content-type: application/json
+
+### 
+# @name add-user
+POST {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf/users/bef7c136-dab4-4b1b-a0e6-725bdcd0fd9c
+Authorization: Bearer {{token}}
+content-type: application/json
+
+{
+  "period": "MORNING",
+  "monday": true,
+  "tuesday": true,
+  "wednesday": true,
+  "thursday": true,
+  "friday": true,
+  "saturday": true,
+  "sunday": true
+}
+
+### 
+# @name update-user-classroom
+PUT {{host}}/{{path}}/bcbaaa50-c81a-4ccc-a904-dc0dceb1d4cf/users/bef7c136-dab4-4b1b-a0e6-725bdcd0fd9c
+Authorization: Bearer {{token}}
+content-type: application/json
+
+{
+  "period": "MORNING",
+  "monday": false,
+  "tuesday": true,
+  "wednesday": true,
+  "thursday": true,
+  "friday": true,
+  "saturday": true,
+  "sunday": true
+}
+
+### 
+
+# @name remove-user-classroom
+DELETE {{host}}/{{path}}/65a98b66-e8f3-47c9-9119-164b1ed31803/users/b2909508-84ff-42da-bfa1-1208f569bc77
+Authorization: Bearer {{token}}

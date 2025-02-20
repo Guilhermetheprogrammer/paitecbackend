@@ -1,0 +1,68 @@
+# @host = https://goes-camera-monitoring-service-webapp-byfhf7enekh7cnbn.eastus-01.azurewebsites.net
+@host = http://localhost:3001
+@path = users
+
+@token = {{ login.response.body.token }}
+
+# @name login
+POST {{host}}/auth/login
+content-type: application/json
+
+{
+  "login": "admin",
+  "password": "admin"
+}
+
+###
+
+
+### 
+# @name me
+GET {{host}}/{{path}}/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiQURNSU4iLCJsb2dpbiI6ImFkbWluIiwic3ViIjoiM2Q1MDhmODUtYmY3OC00YTA5LWI4OWMtZTJhNGFjYmNlMmFmIiwiaWF0IjoxNzM0Mzg0NTE0LCJleHAiOjE3MzQ5ODkzMTR9.HKkPFwM1mD6FEKI6r0PxgAUyaI437JB3pg8523KTM8o
+
+###
+
+# @name create-user
+POST {{host}}/{{path}}
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "parent2",
+  "login": "parent2",
+  "role": "PARENT",
+  "password": "parent2"
+}
+
+### 
+# @name list-users
+GET {{host}}/{{path}}?page=1
+Authorization: Bearer {{token}}
+
+
+### 
+# @name get-user
+GET {{host}}/{{path}}/6cf43dea-413f-4305-ab00-af53a59f3bc0
+Authorization: Bearer {{token}}
+
+### 
+
+# @name update-user
+PUT {{host}}/{{path}}/b2909508-84ff-42da-bfa1-1208f569bc77
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "admin",
+  "login": "admin"
+}
+
+
+### 
+
+# @name delete-user
+DELETE {{host}}/{{path}}/a04dac28-d697-4f7f-8376-2eb47e553588
+Authorization: Bearer {{token}}
+
+### 

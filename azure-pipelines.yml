@@ -1,0 +1,213 @@
+trigger:
+-  master
+pr:
+-  master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  WEBAPP_NAME_DEV: 'goes-camera-monitoring-service-webapp'
+  WEBAPP_NAME_PROD: 'goes-camera-monitoring-service-webapp-prod'
+  NODE_VERSION: '20.x'
+  PORT: '3001'
+  JWT_SECRET: $(jwt-secret)
+  DATABASE_URL_DEV: $(database-conn)
+  DATABASE_URL_PROD: $(database-conn-prod)
+  JWT_EXPIRATION: '30d'
+  SWAGGER_DOCS_URL: '/docs-swagger'
+  REDOC_URL: '/docs'
+  STORAGE_ACCOUNT_NAME: $(storage-account-name)
+  BLOB_CONTAINER_NAME: $(blob-container-name)
+  BLOB_CONNECTION_STRING: $(blob-connection-string)
+  EMAIL_USER: 'EMAIL_USER'
+  EMAIL_PASS: 'EMAIL_PASS'
+  SKIP_PROD: 'true'
+  VIACEP_URL: 'https://viacep.com.br/ws/'
+
+stages:
+-  stage: Build
+   displayName: 'Build stage'
+   jobs:
+   - job: Build
+     displayName: Build
+     pool:
+       vmImage: 'ubuntu-latest'
+     
+     steps:
+     - task: UseNode@1
+       inputs:
+         version: $(NODE_VERSION)
+       displayName: 'Install Node.js'
+       
+     - script: |
+         npm install -g yarn
+         yarn install
+         yarn prisma generate
+         yarn build
+       displayName: 'Install dependencies, generate Prisma Client and build'
+       
+     - task: ArchiveFiles@2
+       displayName: 'Archive files'
+       inputs:
+         rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+         includeRootFolder: false
+         archiveType: 'zip'
+         archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+         replaceExistingArchive: true
+       
+     - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+       artifact: drop
+
+-  stage: TestE2E
+   displayName: 'E2E Testing'
+   dependsOn: Build
+   condition: succeeded()
+   jobs:
+   - job: TestE2E
+     displayName: Run E2E Tests
+     pool:
+       vmImage: 'ubuntu-latest'
+     steps:
+     - task: UseNode@1
+       inputs:
+         version: $(NODE_VERSION)
+       displayName: 'Install Node.js'
+       
+     - script: |
+         npm install -g yarn
+         yarn install
+         echo "DATABASE_URL=$(DATABASE_URL_DEV)" >> .env
+         echo "JWT_SECRET=$(JWT_SECRET)" >> .env
+         echo "BLOB_CONTAINER_NAME=$(BLOB_CONTAINER_NAME)" >> .env
+         echo "BLOB_CONNECTION_STRING=$(BLOB_CONNECTION_STRING)" >> .env
+         echo "STORAGE_ACCOUNT_NAME=$(STORAGE_ACCOUNT_NAME)" >> .env
+         echo "VIACEP_URL=$(VIACEP_URL)" >> .env
+         yarn test:e2e
+       displayName: 'Run E2E Tests'
+
+-  stage: DeployDev
+   displayName: 'Deploy to Dev'
+   dependsOn: TestE2E
+   condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+   jobs:
+   - job: MigrateDev
+     displayName: 'Migrate Dev Database'
+     pool:
+       vmImage: 'ubuntu-latest'
+     steps:
+     - task: UseNode@1
+       inputs:
+         version: $(NODE_VERSION)
+       displayName: 'Install Node.js'
+       
+     - script: |
+         npm install -g yarn
+         yarn install
+         DATABASE_URL=$(DATABASE_URL_DEV) yarn prisma migrate deploy
+       displayName: 'Run Prisma Migrations for Dev'
+   - job: Deploy
+     displayName: Deploy to Dev
+     dependsOn: MigrateDev
+     condition: succeeded()
+     pool:
+       vmImage: 'ubuntu-latest'
+     steps:
+     - download: current
+       artifact: drop
+ 
+     - task: AzureAppServiceSettings@1
+       displayName: 'Configure App Settings for Dev'
+       inputs:
+         azureSubscription: $(azure-subscription)
+         appName: $(WEBAPP_NAME_DEV)
+         resourceGroupName: $(resource-group-name)
+         appSettings: |
+           [
+             {"name":"WEBSITE_RUN_FEOM_PACKAGE","value":"1"},
+             {"name":"NODE_ENV","value":"dev"},
+             {"name":"PORT","value":"$(PORT)"},
+             {"name":"JWT_SECRET","value":"$(JWT_SECRET)"},
+             {"name":"DATABASE_URL","value":"$(DATABASE_URL_DEV)"},
+             {"name":"JWT_EXPIRATION","value":"$(JWT_EXPIRATION)"},
+             {"name":"SWAGGER_DOCS_URL","value":"$(SWAGGER_DOCS_URL)"},
+             {"name":"REDOC_URL","value":"$(REDOC_URL)"},
+             {"name":"STORAGE_ACCOUNT_NAME","value":"$(STORAGE_ACCOUNT_NAME)"},
+             {"name":"BLOB_CONTAINER_NAME","value":"$(BLOB_CONTAINER_NAME)"},
+             {"name":"BLOB_CONNECTION_STRING","value":"$(BLOB_CONNECTION_STRING)"},
+             {"name":"EMAIL_USER","value":"$(EMAIL_USER)"},
+             {"name":"EMAIL_PASS","value":"$(EMAIL_PASS)"},
+             {"name":"VIACEP_URL","value":"$(VIACEP_URL)"}
+           ]
+ 
+     - task: AzureRmWebAppDeployment@4
+       displayName: 'Azure App Service Deploy to Dev'
+       inputs:
+         ConnectionType: 'AzureRM'
+         azureSubscription: $(azure-subscription)
+         appType: 'webApp'
+         WebAppName: $(WEBAPP_NAME_DEV)
+         packageForLinux: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+         StartupCommand: 'yarn setup && yarn start'
+
+-  stage: DeployProd
+   displayName: 'Deploy to Prod'
+   dependsOn: DeployDev
+   condition: and(succeeded(), eq(variables['SkipProd'], 'false'))
+   jobs:
+   - job: waitForValidationPROD
+     displayName: Wait for Approval
+     pool: server
+     timeoutInMinutes: 4320 # job times out in 3 days
+     steps:
+     - task: ManualValidation@0
+       timeoutInMinutes: 360 # task times out in 6 hours
+       inputs:
+         notifyUsers: |
+           [BEYONDITC_DELTA]\goes-camera-monitoring
+         instructions: 'Please validate the build configuration and resume'
+         onTimeout: 'reject' 
+ 
+   - job: Deploy
+     displayName: Deploy to Prod
+     dependsOn: waitForValidationPROD
+     condition: and(succeeded(), eq(variables['SkipProd'], 'false'), ne(variables['Build.Reason'], 'PullRequest'))
+     pool:
+       vmImage: 'ubuntu-latest'
+     steps:
+     - download: current
+       artifact: drop
+ 
+     - task: AzureAppServiceSettings@1
+       displayName: 'Configure App Settings for Prod'
+       inputs:
+         azureSubscription: $(azure-subscription)
+         appName: $(WEBAPP_NAME_PROD)
+         resourceGroupName: $(resource-group-name)
+         appSettings: |
+           [
+             {"name":"WEBSITE_RUN_FEOM_PACKAGE","value":"1"},
+             {"name":"NODE_ENV","value":"prod"},
+             {"name":"PORT","value":"$(PORT)"},
+             {"name":"JWT_SECRET","value":"$(JWT_SECRET)"},
+             {"name":"DATABASE_URL","value":"$(DATABASE_URL_PROD)"},
+             {"name":"JWT_EXPIRATION","value":"$(JWT_EXPIRATION)"},
+             {"name":"SWAGGER_DOCS_URL","value":"$(SWAGGER_DOCS_URL)"},
+             {"name":"REDOC_URL","value":"$(REDOC_URL)"},
+             {"name":"STORAGE_ACCOUNT_NAME","value":"$(STORAGE_ACCOUNT_NAME)"},
+             {"name":"BLOB_CONTAINER_NAME","value":"$(BLOB_CONTAINER_NAME)"},
+             {"name":"BLOB_CONNECTION_STRING","value":"$(BLOB_CONNECTION_STRING)"},
+             {"name":"EMAIL_USER","value":"$(EMAIL_USER)"},
+             {"name":"EMAIL_PASS","value":"$(EMAIL_PASS)"},
+             {"name":"VIACEP_URL","value":"$(VIACEP_URL)"}
+           ]
+ 
+     - task: AzureRmWebAppDeployment@4
+       displayName: 'Azure App Service Deploy to Prod'
+       inputs:
+         ConnectionType: 'AzureRM'
+         azureSubscription: $(azure-subscription)
+         appType: 'webApp'
+         WebAppName: $(WEBAPP_NAME_PROD)
+         packageForLinux: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+         StartupCommand: 'yarn setup && yarn start'

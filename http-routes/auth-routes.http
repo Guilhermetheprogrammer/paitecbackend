@@ -1,0 +1,19 @@
+# @host = https://goes-camera-monitoring-service-webapp-byfhf7enekh7cnbn.eastus-01.azurewebsites.net
+@host = http://localhost:3001
+@path = auth
+@token = {{ login.response.body.token }}
+
+# @name login
+POST {{host}}/{{path}}/login
+content-type: application/json
+
+{
+  "login": "parent",
+  "password": "parent"
+}
+
+###
+
+# @name refresh
+POST {{host}}/{{path}}/refresh
+Authorization: Bearer {{token}}
